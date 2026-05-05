@@ -1,0 +1,82 @@
+{
+  "name": "max-browser",
+  "productName": "Макс Браузер",
+  "version": "1.0.0",
+  "description": "Макс Браузер — отечественный браузер с технологией доверенного контура SafeNet Periphery.",
+  "main": "main.js",
+  "homepage": "https://github.com/MDsays/max-browser",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MDsays/max-browser.git"
+  },
+  "bugs": {
+    "url": "https://github.com/MDsays/max-browser/issues"
+  },
+  "author": {
+    "name": "MDsays",
+    "url": "https://github.com/MDsays"
+  },
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --enable-logging",
+    "build:icon": "node scripts/build-icon.js",
+    "build:win": "electron-builder --win --x64",
+    "release": "node scripts/build-release.js"
+  },
+  "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "png-to-ico": "^3.0.1"
+  },
+  "build": {
+    "appId": "ru.maxbrowser.app",
+    "productName": "Макс Браузер",
+    "copyright": "Copyright © 2026 MDsays",
+    "directories": {
+      "output": "dist",
+      "buildResources": "assets"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "internal-preload.js",
+      "storage.js",
+      "whitelist.json",
+      "renderer/**/*",
+      "assets/icon.ico",
+      "assets/icon.png",
+      "Max_logo.svg",
+      "Max_logo_outline.svg",
+      "package.json"
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico",
+      "artifactName": "MaxBrowser-Setup-${version}.${ext}",
+      "publisherName": "MDsays"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Макс Браузер",
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "installerHeaderIcon": "assets/icon.ico",
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true
+    }
+  }
+}

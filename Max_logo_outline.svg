@@ -1,0 +1,55 @@
+'use strict';
+
+const { contextBridge, ipcRenderer } = require('electron');
+
+function isInternalPage() {
+  const href = location.href || '';
+  return href.includes('/renderer/internal/');
+}
+
+if (isInternalPage()) {
+  const sub = (ch) => (cb) => {
+    const h = (_e, ...args) => cb(...args);
+    ipcRenderer.on(ch, h);
+    return () => ipcRenderer.removeListener(ch, h);
+  };
+
+  contextBridge.exposeInMainWorld('maxAPI', {
+    open: (target, opts) => ipcRenderer.send('nav:open', target, opts || {}),
+
+    settings: {
+      get:    () => ipcRenderer.invoke('settings:get'),
+      update: (patch) => ipcRenderer.invoke('settings:update', patch),
+      onUpdated: sub('settings:updated')
+    },
+    whitelist: {
+      get:  () => ipcRenderer.invoke('whitelist:get'),
+      save: (next) => ipcRenderer.invoke('whitelist:save', next),
+      onUpdated: sub('whitelist:updated')
+    },
+    history: {
+      get:    (limit) => ipcRenderer.invoke('history:get', limit),
+      remove: (ts)    => ipcRenderer.invoke('history:remove', ts),
+      clear:  () => ipcRenderer.invoke('history:clear')
+    },
+    bookmarks: {
+      get:    () => ipcRenderer.invoke('bookmarks:get'),
+      add:    (b) => ipcRenderer.invoke('bookmarks:add', b),
+      remove: (id) => ipcRenderer.invoke('bookmarks:remove', id),
+      onUpdated: sub('bookmarks:updated')
+    },
+    downloads: {
+      get:           () => ipcRenderer.invoke('downloads:get'),
+      clear:         () => ipcRenderer.invoke('downloads:clear'),
+      openFile:      (p) => ipcRenderer.invoke('downloads:open-file', p),
+      showInFolder:  (p) => ipcRenderer.invoke('downloads:show-in-folder', p),
+      onUpdated:     sub('downloads:updated')
+    },
+    app: {
+      clearData:    (opts) => ipcRenderer.invoke('app:clear-data', opts),
+      openExternal: (u)    => ipcRenderer.invoke('shell:open-external', u),
+      disableFilter:(key)  => ipcRenderer.invoke('app:disable-filter', key),
+      enableFilter: ()     => ipcRenderer.invoke('app:enable-filter')
+    }
+  });
+}

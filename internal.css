@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>Загрузки · Макс Браузер</title>
+  <link rel="stylesheet" href="internal.css" />
+</head>
+<body>
+  <div class="container">
+    <div class="page-header">
+      <div>
+        <h1>Загрузки</h1>
+        <div class="subtitle" id="count">…</div>
+      </div>
+      <div class="toolbar">
+        <button class="btn btn-danger" id="clear">Очистить список</button>
+      </div>
+    </div>
+
+    <div class="list" id="list"></div>
+  </div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+function fmtBytes(b) {
+  if (!b && b !== 0) return '-';
+  const u = ['Б','КБ','МБ','ГБ','ТБ'];
+  let i = 0; let n = b;
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  return n.toFixed(n >= 10 ? 0 : 1) + ' ' + u[i];
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+function stateBadge(s) {
+  if (s === 'completed')   return '<span class="badge ok">Готово</span>';
+  if (s === 'cancelled')   return '<span class="badge bad">Отменено</span>';
+  if (s === 'interrupted') return '<span class="badge bad">Прервано</span>';
+  if (s === 'progressing') return '<span class="badge warn">Идёт загрузка</span>';
+  return '<span class="badge">' + escapeHtml(s) + '</span>';
+}
+
+function render(items) {
+  const list = $('list'); list.innerHTML = '';
+  $('count').textContent = items.length ? `${items.length} файлов` : 'Загрузок пока нет';
+  if (!items.length) {
+    list.innerHTML = '<div class="empty-state">Здесь появятся файлы, которые вы скачали.</div>';
+    return;
+  }
+  for (const d of items) {
+    const pct = d.totalBytes > 0 ? Math.min(100, Math.round((d.receivedBytes / d.totalBytes) * 100)) : 0;
+    const el = document.createElement('div');
+    el.className = 'list-item';
+    el.innerHTML = `
+      <div class="info">
+        <div class="title">${escapeHtml(d.filename)}</div>
+        <div class="url">${escapeHtml(d.url)}</div>
+        <div class="meta" style="margin-top: 4px;">
+          ${stateBadge(d.state)}
+          &nbsp;·&nbsp; ${fmtBytes(d.receivedBytes)} / ${fmtBytes(d.totalBytes)}
+          ${d.state === 'progressing' ? `<div class="progress-thin"><div style="width: ${pct}%"></div></div>` : ''}
+        </div>
+      </div>
+      <div class="actions">
+        ${d.state === 'completed' ? `
+          <button class="iconbtn" title="Открыть файл" data-act="open">▶</button>
+          <button class="iconbtn" title="Показать в папке" data-act="folder">📁</button>
+        ` : ''}
+      </div>
+    `;
+    el.querySelectorAll('.iconbtn').forEach(b => {
+      b.addEventListener('click', () => {
+        const act = b.dataset.act;
+        if (act === 'open') window.maxAPI.downloads.openFile(d.savePath);
+        if (act === 'folder') window.maxAPI.downloads.showInFolder(d.savePath);
+      });
+    });
+    list.appendChild(el);
+  }
+}
+
+$('clear').addEventListener('click', async () => {
+  if (!confirm('Очистить список загрузок?')) return;
+  await window.maxAPI.downloads.clear();
+});
+
+window.maxAPI.downloads.onUpdated((items) => render(items));
+
+(async () => render(await window.maxAPI.downloads.get()))();
+</script>
+</body>
+</html>

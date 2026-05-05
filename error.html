@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>Закладки · Макс Браузер</title>
+  <link rel="stylesheet" href="internal.css" />
+</head>
+<body>
+  <div class="container">
+    <div class="page-header">
+      <div>
+        <h1>Закладки</h1>
+        <div class="subtitle" id="count">…</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Добавить закладку</h2>
+      <div class="toolbar" style="gap: 8px;">
+        <input type="text" id="b-title" placeholder="Название" style="flex: 1;" />
+        <input type="text" id="b-url"   placeholder="URL"      style="flex: 2;" />
+        <button class="btn btn-primary" id="b-add">Добавить</button>
+      </div>
+    </div>
+
+    <input class="search" type="text" id="search" placeholder="Поиск по закладкам" />
+
+    <div class="list" id="list"></div>
+  </div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let raw = [];
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+function attachFaviconFallback(img, host) {
+  if (!img || !host) return;
+  const cands = [
+    `https://favicon.yandex.net/favicon/${host}`,
+    `https://${host}/favicon.ico`,
+    `https://${host}/apple-touch-icon.png`
+  ];
+  let i = 0;
+  img.onerror = () => {
+    if (i >= cands.length) { img.removeAttribute('src'); img.onerror = null; return; }
+    img.src = cands[i++];
+  };
+  img.src = cands[i++];
+}
+
+function render(items) {
+  const list = $('list'); list.innerHTML = '';
+  $('count').textContent = items.length ? `${items.length} закладок` : 'Закладок пока нет';
+  if (!items.length) {
+    list.innerHTML = '<div class="empty-state">Добавьте сайты в закладки кнопкой ☆ в адресной строке.</div>';
+    return;
+  }
+  for (const b of items) {
+    let host = '';
+    try { host = new URL(b.url).hostname; } catch {}
+    const el = document.createElement('div');
+    el.className = 'list-item';
+    el.innerHTML = `
+      <img class="favicon" alt="" referrerpolicy="no-referrer" />
+      <div class="info">
+        <div class="title">${escapeHtml(b.title || b.url)}</div>
+        <div class="url">${escapeHtml(b.url)}</div>
+      </div>
+      <div class="actions">
+        <button class="iconbtn" title="Открыть">↗</button>
+        <button class="iconbtn" title="Удалить">✕</button>
+      </div>
+    `;
+    attachFaviconFallback(el.querySelector('img.favicon'), host);
+    const [openBtn, delBtn] = el.querySelectorAll('.iconbtn');
+    openBtn.addEventListener('click', () => window.maxAPI.open(b.url));
+    delBtn.addEventListener('click',  async () => {
+      await window.maxAPI.bookmarks.remove(b.id);
+    });
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('.iconbtn')) return;
+      window.maxAPI.open(b.url);
+    });
+    list.appendChild(el);
+  }
+}
+
+function apply() {
+  const q = $('search').value.trim().toLowerCase();
+  const filt = q ? raw.filter(b => (b.url + ' ' + (b.title||'')).toLowerCase().includes(q)) : raw;
+  render(filt);
+}
+
+$('search').addEventListener('input', apply);
+
+$('b-add').addEventListener('click', async () => {
+  const url   = $('b-url').value.trim();
+  const title = $('b-title').value.trim() || url;
+  if (!url) return;
+  await window.maxAPI.bookmarks.add({ url, title });
+  $('b-url').value = ''; $('b-title').value = '';
+});
+
+window.maxAPI.bookmarks.onUpdated(async (list) => { raw = list; apply(); });
+
+(async () => {
+  raw = await window.maxAPI.bookmarks.get();
+  apply();
+})();
+</script>
+</body>
+</html>

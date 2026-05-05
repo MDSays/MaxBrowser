@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>История · Макс Браузер</title>
+  <link rel="stylesheet" href="internal.css" />
+</head>
+<body>
+  <div class="container">
+    <div class="page-header">
+      <div>
+        <h1>История</h1>
+        <div class="subtitle" id="count">…</div>
+      </div>
+      <div class="toolbar">
+        <button class="btn btn-danger" id="clear">Очистить всю историю</button>
+      </div>
+    </div>
+
+    <input class="search" type="text" id="search" placeholder="Поиск по истории" />
+
+    <div class="list" id="list"></div>
+  </div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let raw = [];
+
+function fmtDate(ts) {
+  const d = new Date(ts);
+  const today = new Date(); today.setHours(0,0,0,0);
+  const yest  = new Date(today); yest.setDate(today.getDate() - 1);
+  const day = new Date(d); day.setHours(0,0,0,0);
+
+  const time = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  if (day.getTime() === today.getTime()) return 'Сегодня, ' + time;
+  if (day.getTime() === yest.getTime())  return 'Вчера, '  + time;
+  return d.toLocaleDateString('ru-RU') + ', ' + time;
+}
+
+function render(items) {
+  const list = $('list'); list.innerHTML = '';
+  $('count').textContent = items.length ? `${items.length} записей` : 'История пуста';
+  if (!items.length) {
+    list.innerHTML = '<div class="empty-state">История пуста.</div>';
+    return;
+  }
+  for (const h of items) {
+    let host = '';
+    try { host = new URL(h.url).hostname; } catch {}
+    const el = document.createElement('div');
+    el.className = 'list-item';
+    el.innerHTML = `
+      <img class="favicon" alt="" referrerpolicy="no-referrer" />
+      <div class="info">
+        <div class="title">${escapeHtml(h.title || h.url)}</div>
+        <div class="url">${escapeHtml(h.url)}</div>
+      </div>
+      <div class="meta">${fmtDate(h.ts)}</div>
+      <div class="actions">
+        <button class="iconbtn" title="Открыть">↗</button>
+        <button class="iconbtn" title="Удалить">✕</button>
+      </div>
+    `;
+    attachFaviconFallback(el.querySelector('img.favicon'), host);
+    const [openBtn, delBtn] = el.querySelectorAll('.iconbtn');
+    openBtn.addEventListener('click', () => window.maxAPI.open(h.url));
+    delBtn.addEventListener('click', async () => {
+      raw = await window.maxAPI.history.remove(h.ts);
+      apply();
+    });
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('.iconbtn')) return;
+      window.maxAPI.open(h.url);
+    });
+    list.appendChild(el);
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+function attachFaviconFallback(img, host) {
+  if (!img || !host) return;
+  const cands = [
+    `https://favicon.yandex.net/favicon/${host}`,
+    `https://${host}/favicon.ico`,
+    `https://${host}/apple-touch-icon.png`
+  ];
+  let i = 0;
+  img.onerror = () => {
+    if (i >= cands.length) { img.removeAttribute('src'); img.onerror = null; return; }
+    img.src = cands[i++];
+  };
+  img.src = cands[i++];
+}
+
+function apply() {
+  const q = $('search').value.trim().toLowerCase();
+  const filt = q ? raw.filter(h => (h.url + ' ' + (h.title||'')).toLowerCase().includes(q)) : raw;
+  render(filt);
+}
+
+$('search').addEventListener('input', apply);
+$('clear').addEventListener('click', async () => {
+  if (!confirm('Очистить всю историю?')) return;
+  raw = await window.maxAPI.history.clear();
+  apply();
+});
+
+(async () => {
+  raw = await window.maxAPI.history.get(2000);
+  apply();
+})();
+</script>
+</body>
+</html>

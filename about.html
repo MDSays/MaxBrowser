@@ -1,0 +1,773 @@
+'use strict';
+
+// =====================================================================
+// DOM refs
+// =====================================================================
+const $ = (id) => document.getElementById(id);
+
+const tabsEl       = $('tabs');
+const contentEl    = $('content');
+const addressEl    = $('address');
+const addressForm  = $('address-form');
+const lockEl       = $('lock');
+const bookmarksBar = $('bookmarks-bar');
+const progressBar  = $('progress-bar');
+
+const btnBack       = $('btn-back');
+const btnForward    = $('btn-forward');
+const btnReload     = $('btn-reload');
+const btnHome       = $('btn-home');
+const btnNewTab     = $('btn-newtab');
+const btnDownloads  = $('btn-downloads');
+const btnMenu       = $('btn-menu');
+const btnBookmark   = $('btn-bookmark');
+const btnMin        = $('btn-min');
+const btnMax        = $('btn-max');
+const btnClose      = $('btn-close');
+
+const findBar    = $('find-bar');
+const findInput  = $('find-input');
+const findCount  = $('find-count');
+const findPrev   = $('find-prev');
+const findNext   = $('find-next');
+const findClose  = $('find-close');
+
+const appMenu    = $('app-menu');
+const tabMenu    = $('tab-menu');
+const zoomLabel  = $('zoom-label');
+
+const modalFstec    = $('modal-fstec');
+const modalFstecOk  = $('modal-fstec-ok');
+
+// =====================================================================
+// State
+// =====================================================================
+let PAGES = {};
+let SETTINGS = {};
+const tabs = [];
+let activeTabId = null;
+let tabCounter = 0;
+let tabMenuTabId = null;
+const uid = () => 't' + (++tabCounter);
+
+// =====================================================================
+// Init
+// =====================================================================
+async function init() {
+  PAGES = await window.maxAPI.app.pages();
+  SETTINGS = await window.maxAPI.settings.get();
+
+  bindUI();
+  bindIpc();
+  await renderBookmarksBar();
+
+  createTab(SETTINGS.homepage || 'max://start', true);
+}
+
+function bindUI() {
+  // Подавляем браузерное контекстное меню в самом окне UI:
+  // правый клик в рамке окна не должен превращаться в меню "как на сайте".
+  // Для редактируемых полей системное меню всё равно покажется (через main process).
+  window.addEventListener('contextmenu', (e) => {
+    // нативное меню для editable показывает Electron из main.js
+    e.preventDefault();
+  });
+
+  // Подавляем drag-and-drop файлов в окно (иначе UI заменится файлом)
+  window.addEventListener('dragover', (e) => e.preventDefault());
+  window.addEventListener('drop',     (e) => e.preventDefault());
+
+  btnMin.addEventListener('click',   () => window.maxAPI.window.minimize());
+  btnMax.addEventListener('click',   () => window.maxAPI.window.maximizeToggle());
+  btnClose.addEventListener('click', () => window.maxAPI.window.close());
+
+  btnNewTab.addEventListener('click',    () => createTab(SETTINGS.homepage || 'max://start', true));
+  btnDownloads.addEventListener('click', () => openOrFocusInternal('max://downloads'));
+  btnMenu.addEventListener('click',      (e) => { e.stopPropagation(); toggleAppMenu(); });
+  btnBookmark.addEventListener('click',  toggleBookmarkCurrent);
+
+  btnBack.addEventListener('click',    () => navAct('back'));
+  btnForward.addEventListener('click', () => navAct('forward'));
+  btnReload.addEventListener('click',  () => navAct('reload'));
+  btnHome.addEventListener('click',    () => navAct('home'));
+
+  addressForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const t = activeTab(); if (!t) return;
+    const value = addressEl.value.trim(); if (!value) return;
+    loadInTab(t, normalizeAddress(value));
+    t.webview.focus();
+  });
+  addressEl.addEventListener('focus', () => addressEl.select());
+
+  // Find bar
+  findInput.addEventListener('input', () => doFind(findInput.value, true));
+  findInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); doFind(findInput.value, false, !e.shiftKey); }
+    if (e.key === 'Escape') { e.preventDefault(); closeFind(); }
+  });
+  findPrev.addEventListener('click', () => doFind(findInput.value, false, false));
+  findNext.addEventListener('click', () => doFind(findInput.value, false, true));
+  findClose.addEventListener('click', closeFind);
+
+  // App menu items
+  appMenu.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-act]'); if (!btn) return;
+    const act = btn.dataset.act;
+    // Для зум-кнопок не закрываем меню
+    const keepOpen = (act === 'zoom-in' || act === 'zoom-out' || act === 'zoom-reset');
+    if (!keepOpen) hideMenus();
+    runMenuAction(act);
+    if (keepOpen) updateZoomLabel();
+  });
+
+  // Tab context menu
+  tabMenu.addEventListener('click', (e) => {
+    const btn = e.target.closest('.mi'); if (!btn) return;
+    const act = btn.dataset.act;
+    const tid = tabMenuTabId;
+    hideMenus();
+    runTabAction(act, tid);
+  });
+
+  // Hide menus on outside click
+  window.addEventListener('mousedown', (e) => {
+    if (!appMenu.classList.contains('hidden') && !appMenu.contains(e.target) && e.target !== btnMenu) hideMenus();
+    if (!tabMenu.classList.contains('hidden') && !tabMenu.contains(e.target)) hideMenus();
+  });
+
+  // Modal
+  modalFstecOk.addEventListener('click', () => modalFstec.classList.add('hidden'));
+  modalFstec.addEventListener('click', (e) => { if (e.target === modalFstec) modalFstec.classList.add('hidden'); });
+
+  // Global hotkeys
+  window.addEventListener('keydown', (e) => {
+    const ctrl = e.ctrlKey || e.metaKey;
+    if (ctrl && !e.shiftKey && e.key.toLowerCase() === 't')  { e.preventDefault(); createTab(SETTINGS.homepage || 'max://start', true); }
+    else if (ctrl && e.key.toLowerCase() === 'w')            { e.preventDefault(); if (activeTabId) closeTab(activeTabId); }
+    else if (ctrl && e.key.toLowerCase() === 'r')            { e.preventDefault(); navAct(e.shiftKey ? 'hard-reload' : 'reload'); }
+    else if (ctrl && e.key.toLowerCase() === 'l')            { e.preventDefault(); addressEl.focus(); addressEl.select(); }
+    else if (ctrl && e.key.toLowerCase() === 'f')            { e.preventDefault(); openFind(); }
+    else if (ctrl && e.key.toLowerCase() === 'd')            { e.preventDefault(); toggleBookmarkCurrent(); }
+    else if (ctrl && e.key.toLowerCase() === 'j')            { e.preventDefault(); openOrFocusInternal('max://downloads'); }
+    else if (ctrl && e.key.toLowerCase() === 'h')            { e.preventDefault(); openOrFocusInternal('max://history'); }
+    else if (ctrl && e.shiftKey && e.key.toLowerCase() === 'b'){ e.preventDefault(); openOrFocusInternal('max://bookmarks'); }
+    else if (ctrl && e.key === ',')                          { e.preventDefault(); openOrFocusInternal('max://settings'); }
+    else if (ctrl && (e.key === '=' || e.key === '+'))       { e.preventDefault(); zoom(+1); }
+    else if (ctrl && e.key === '-')                          { e.preventDefault(); zoom(-1); }
+    else if (ctrl && e.key === '0')                          { e.preventDefault(); zoomReset(); }
+    else if (ctrl && e.key.toLowerCase() === 'p')            { e.preventDefault(); printActive(); }
+    else if (e.key === 'F12')                                { e.preventDefault(); requestDevTools(); }
+    else if (e.key === 'F11')                                { e.preventDefault(); window.maxAPI.window.toggleFullscreen(); }
+    else if (e.key === 'F5')                                 { e.preventDefault(); navAct(e.shiftKey ? 'hard-reload' : 'reload'); }
+    else if (e.altKey && e.key === 'ArrowLeft')              { e.preventDefault(); navAct('back'); }
+    else if (e.altKey && e.key === 'ArrowRight')             { e.preventDefault(); navAct('forward'); }
+    else if (ctrl && e.key === 'Tab')                        { e.preventDefault(); cycleTabs(e.shiftKey ? -1 : +1); }
+  });
+}
+
+function bindIpc() {
+  window.maxAPI.tabs.onOpen((url) => createTab(url, true));
+
+  window.maxAPI.window.onState((s) => {
+    document.body.classList.toggle('maximized', !!s.maximized);
+    document.body.classList.toggle('fullscreen', !!s.fullscreen);
+  });
+
+  window.maxAPI.bookmarks.onUpdated(() => renderBookmarksBar());
+  window.maxAPI.settings.onUpdated((s) => { SETTINGS = s; renderBookmarksBar(); });
+  window.maxAPI.whitelist.onUpdated(() => updateLock(activeTab() ? activeTab().url : ''));
+
+  window.maxAPI.cmd.onNewTab(()    => createTab(SETTINGS.homepage || 'max://start', true));
+  window.maxAPI.cmd.onCloseTab(()  => { if (activeTabId) closeTab(activeTabId); });
+  window.maxAPI.cmd.onReload(()    => navAct('reload'));
+  window.maxAPI.cmd.onHardReload(()=> navAct('hard-reload'));
+  window.maxAPI.cmd.onPrint(()     => printActive());
+  window.maxAPI.cmd.onFind(()      => openFind());
+  window.maxAPI.cmd.onZoomIn(()    => zoom(+1));
+  window.maxAPI.cmd.onZoomOut(()   => zoom(-1));
+  window.maxAPI.cmd.onZoomReset(() => zoomReset());
+  window.maxAPI.cmd.onDevTools(()  => requestDevTools());
+  window.maxAPI.cmd.onBack(()      => navAct('back'));
+  window.maxAPI.cmd.onForward(()   => navAct('forward'));
+  window.maxAPI.cmd.onHome(()      => navAct('home'));
+  window.maxAPI.cmd.onBookmarkAdd(() => toggleBookmarkCurrent());
+  window.maxAPI.cmd.onToggleBookmarksBar(async () => {
+    SETTINGS = await window.maxAPI.settings.update({ showBookmarksBar: !SETTINGS.showBookmarksBar });
+    renderBookmarksBar();
+  });
+}
+
+// =====================================================================
+// Address normalization
+// =====================================================================
+function normalizeAddress(value) {
+  if (/^max:/i.test(value)) return value;
+  if (/^(file|about|data|chrome|devtools):/i.test(value)) return value;
+  if (/^https?:\/\//i.test(value)) return value;
+  if (/^[^\s]+\.[^\s]+(\/.*)?$/.test(value) || /^localhost(:\d+)?(\/.*)?$/i.test(value)) {
+    return 'https://' + value;
+  }
+  return 'https://yandex.ru/search/?text=' + encodeURIComponent(value);
+}
+
+// =====================================================================
+// Tabs
+// =====================================================================
+function activeTab() { return tabs.find(t => t.id === activeTabId) || null; }
+
+async function resolveDisplayUrl(rawUrl) {
+  if (!rawUrl) return rawUrl;
+  if (rawUrl.startsWith('max:')) {
+    const real = await window.maxAPI.app.resolveMaxUrl(rawUrl);
+    return real || rawUrl;
+  }
+  return rawUrl;
+}
+
+function createTab(initialUrl, activate = true, opts = {}) {
+  const id = uid();
+
+  const tabEl = document.createElement('div');
+  tabEl.className = 'tab' + (opts.pinned ? ' pinned' : '');
+  tabEl.dataset.id = id;
+  tabEl.draggable = true;
+  tabEl.innerHTML = `
+    <div class="favicon"></div>
+    <span class="title">Новая вкладка</span>
+    <span class="close" title="Закрыть вкладку">&#x2715;</span>
+  `;
+  const titleEl   = tabEl.querySelector('.title');
+  const faviconEl = tabEl.querySelector('.favicon');
+
+  tabEl.addEventListener('click', (e) => {
+    if (e.target.classList.contains('close')) closeTab(id);
+    else activateTab(id);
+  });
+  tabEl.addEventListener('auxclick', (e) => { if (e.button === 1) closeTab(id); });
+  tabEl.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); showTabMenu(id, e.clientX, e.clientY); });
+
+  // Drag-drop reorder
+  tabEl.addEventListener('dragstart', (e) => {
+    tabEl.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', id);
+  });
+  tabEl.addEventListener('dragend', () => {
+    tabEl.classList.remove('dragging');
+    document.querySelectorAll('.tab').forEach(el => el.classList.remove('drop-before','drop-after'));
+  });
+  tabEl.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    const r = tabEl.getBoundingClientRect();
+    const before = (e.clientX - r.left) < r.width / 2;
+    document.querySelectorAll('.tab').forEach(el => el.classList.remove('drop-before','drop-after'));
+    tabEl.classList.add(before ? 'drop-before' : 'drop-after');
+  });
+  tabEl.addEventListener('drop', (e) => {
+    e.preventDefault();
+    const fromId = e.dataTransfer.getData('text/plain');
+    if (!fromId || fromId === id) return;
+    const r = tabEl.getBoundingClientRect();
+    const before = (e.clientX - r.left) < r.width / 2;
+    moveTab(fromId, id, before);
+  });
+
+  tabsEl.appendChild(tabEl);
+
+  const webview = document.createElement('webview');
+  webview.setAttribute('allowpopups', 'true');
+  webview.setAttribute('partition', 'persist:max');
+  webview.setAttribute('webpreferences', 'spellcheck=true');
+  contentEl.appendChild(webview);
+
+  const tab = {
+    id, tabEl, webview, titleEl, faviconEl,
+    url: initialUrl, title: 'Новая вкладка', favicon: '',
+    pinned: !!opts.pinned, zoom: 0, loading: false,
+    findActive: false
+  };
+  tabs.push(tab);
+
+  attachWebviewEvents(tab);
+
+  resolveDisplayUrl(initialUrl).then((real) => {
+    webview.setAttribute('src', real);
+  });
+
+  if (activate) activateTab(id);
+  return tab;
+}
+
+function attachWebviewEvents(tab) {
+  const { webview } = tab;
+
+  webview.addEventListener('dom-ready', () => {
+    if (tab.zoom !== 0) webview.setZoomLevel(tab.zoom);
+    else webview.setZoomLevel(SETTINGS.defaultZoom || 0);
+  });
+
+  webview.addEventListener('page-title-updated', (e) => {
+    const internal = internalTitleFor(tab.url);
+    tab.title = internal || e.title || 'Без названия';
+    tab.titleEl.textContent = tab.title;
+    if (tab.id === activeTabId) document.title = tab.title + ' · Макс Браузер';
+  });
+
+  webview.addEventListener('page-favicon-updated', (e) => {
+    if (isInternalUrl(tab.url)) {
+      applyInternalFavicon(tab);
+      return;
+    }
+    const url = (e.favicons && e.favicons[0]) || '';
+    tab.favicon = url;
+    if (url) tab.faviconEl.style.backgroundImage = `url("${url}")`;
+  });
+
+  webview.addEventListener('did-start-loading', () => {
+    tab.loading = true;
+    tab.faviconEl.classList.add('loading');
+    if (tab.id === activeTabId) showProgress(true);
+  });
+  webview.addEventListener('did-stop-loading', () => {
+    tab.loading = false;
+    tab.faviconEl.classList.remove('loading');
+    if (tab.id === activeTabId) {
+      showProgress(false);
+      updateNavState();
+      updateBookmarkButton();
+    }
+  });
+
+  webview.addEventListener('did-navigate', (e) => {
+    tab.url = e.url;
+    applyInternalFavicon(tab);
+    const internal = internalTitleFor(e.url);
+    if (internal) {
+      tab.title = internal;
+      tab.titleEl.textContent = internal;
+    }
+    if (tab.id === activeTabId) {
+      addressEl.value = displayUrl(e.url);
+      updateLock(e.url);
+      updateNavState();
+      updateBookmarkButton();
+      if (internal) document.title = internal + ' · Макс Браузер';
+    }
+  });
+  webview.addEventListener('did-navigate-in-page', (e) => {
+    tab.url = e.url;
+    if (tab.id === activeTabId) {
+      addressEl.value = displayUrl(e.url);
+      updateLock(e.url);
+      updateBookmarkButton();
+    }
+  });
+  webview.addEventListener('did-fail-load', (e) => {
+    if (e.errorCode === -3) return;
+    if (e.isMainFrame === false) return;
+    // Главный обработчик ошибок живёт в main.js и подменяет страницу
+    // на max://error. Здесь только сбрасываем индикатор загрузки.
+    if (tab.id === activeTabId) {
+      showProgress(false);
+      updateNavState();
+    }
+  });
+
+  webview.addEventListener('found-in-page', (e) => {
+    if (tab.id !== activeTabId) return;
+    findCount.textContent = `${e.result.activeMatchOrdinal}/${e.result.matches}`;
+  });
+
+  webview.addEventListener('enter-html-full-screen', () => window.maxAPI.window.toggleFullscreen());
+  webview.addEventListener('leave-html-full-screen', () => window.maxAPI.window.toggleFullscreen());
+}
+
+// Сравниваем file://-URL без учёта query/hash и регистра, т.к. Chromium может
+// нормализовать путь (например, регистр буквы диска на Windows).
+function sameInternal(u, page) {
+  if (!u || !page) return false;
+  const a = u.split('#')[0].split('?')[0].toLowerCase();
+  const b = page.split('#')[0].split('?')[0].toLowerCase();
+  return a === b;
+}
+
+function internalKey(u) {
+  if (!u || !PAGES) return null;
+  if (u.startsWith(PAGES.blocked))   return 'blocked';
+  if (u.startsWith(PAGES.confirm))   return 'confirm';
+  if (sameInternal(u, PAGES.start))     return 'start';
+  if (sameInternal(u, PAGES.settings))  return 'settings';
+  if (sameInternal(u, PAGES.history))   return 'history';
+  if (sameInternal(u, PAGES.bookmarks)) return 'bookmarks';
+  if (sameInternal(u, PAGES.downloads)) return 'downloads';
+  if (sameInternal(u, PAGES.about))     return 'about';
+  return null;
+}
+
+const INTERNAL_TITLES = {
+  start:     'Главная',
+  settings:  'Настройки',
+  history:   'История',
+  bookmarks: 'Закладки',
+  downloads: 'Загрузки',
+  about:     'О Макс',
+  blocked:   'Доступ ограничен',
+  confirm:   'Подтверждение'
+};
+
+const INTERNAL_ADDR = {
+  start:     'max://start',
+  settings:  'max://settings',
+  history:   'max://history',
+  bookmarks: 'max://bookmarks',
+  downloads: 'max://downloads',
+  about:     'max://about'
+};
+
+function isInternalUrl(u) { return !!internalKey(u); }
+
+function internalTitleFor(u) {
+  const k = internalKey(u);
+  return k ? INTERNAL_TITLES[k] : null;
+}
+
+function applyInternalFavicon(tab) {
+  if (!tab) return;
+  if (isInternalUrl(tab.url)) tab.faviconEl.classList.add('internal');
+  else                        tab.faviconEl.classList.remove('internal');
+}
+
+function displayUrl(u) {
+  if (!u) return '';
+  const k = internalKey(u);
+  if (k === 'blocked' || k === 'confirm') {
+    try {
+      const parsed = new URL(u);
+      const orig = parsed.searchParams.get('url');
+      const icon = k === 'blocked' ? '⛔' : '⚠';
+      return orig ? icon + ' ' + orig : icon + ' ' + INTERNAL_TITLES[k];
+    } catch { return u; }
+  }
+  if (k && INTERNAL_ADDR[k]) return INTERNAL_ADDR[k];
+  return u;
+}
+
+// Маленькие SVG-иконки для индикатора безопасности (без эмодзи).
+const ICONS = {
+  // Закрытый замок (https + всё ок)
+  lock:   '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
+  // Щит (внутренние max:// страницы)
+  shield: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.5 9 8 11 4.5-2 8-6 8-11V5z"/></svg>',
+  // Треугольник предупреждения
+  warn:   '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.7 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.7a2 2 0 0 0-3.4 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>',
+  // Запрет
+  block:  '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 14.14 14.14"/></svg>',
+  // Звезда (закладка) — пустая и заполненная
+  starOutline: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15 9 22 9 16.5 13.5 18.5 21 12 16.5 5.5 21 7.5 13.5 2 9 9 9 12 2"/></svg>',
+  starFilled:  '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15 9 22 9 16.5 13.5 18.5 21 12 16.5 5.5 21 7.5 13.5 2 9 9 9 12 2"/></svg>'
+};
+
+function setLock(icon, cls) {
+  lockEl.innerHTML = ICONS[icon] || '';
+  lockEl.className = 'lock' + (cls ? ' ' + cls : '');
+}
+
+async function updateLock(u) {
+  const k = internalKey(u);
+  if (k === 'blocked')                                       return setLock('block',  'blocked');
+  if (k === 'confirm')                                       return setLock('warn',   'warn');
+  if (k || !u || u.startsWith('about:') || u.startsWith('max:')) return setLock('shield', '');
+  const cls = await window.maxAPI.app.classifyUrl(u);
+  if (cls === 'block')                                       return setLock('block', 'blocked');
+  if (cls === 'confirm')                                     return setLock('warn',  'warn');
+  if (u.startsWith('https://'))                              return setLock('lock',  '');
+  return setLock('warn', 'insecure');
+}
+
+function updateNavState() {
+  const t = activeTab(); if (!t) return;
+  try {
+    btnBack.disabled    = !t.webview.canGoBack();
+    btnForward.disabled = !t.webview.canGoForward();
+  } catch {}
+}
+
+function activateTab(id) {
+  activeTabId = id;
+  for (const t of tabs) {
+    const isActive = t.id === id;
+    t.tabEl.classList.toggle('active', isActive);
+    t.webview.classList.toggle('active', isActive);
+  }
+  const t = activeTab();
+  if (t) {
+    addressEl.value = displayUrl(t.url || '');
+    updateLock(t.url || '');
+    updateNavState();
+    updateBookmarkButton();
+    const it = internalTitleFor(t.url) || t.title;
+    document.title = it ? (it + ' · Макс Браузер') : 'Макс Браузер';
+    showProgress(t.loading);
+    closeFind(false);
+  }
+}
+
+function closeTab(id) {
+  const idx = tabs.findIndex(t => t.id === id);
+  if (idx === -1) return;
+  const t = tabs[idx];
+  t.tabEl.remove();
+  t.webview.remove();
+  tabs.splice(idx, 1);
+  if (tabs.length === 0) {
+    createTab(SETTINGS.homepage || 'max://start', true);
+  } else if (activeTabId === id) {
+    const next = tabs[Math.max(0, idx - 1)];
+    activateTab(next.id);
+  }
+}
+
+function moveTab(fromId, toId, before) {
+  const fi = tabs.findIndex(t => t.id === fromId);
+  const ti = tabs.findIndex(t => t.id === toId);
+  if (fi === -1 || ti === -1 || fi === ti) return;
+  const [item] = tabs.splice(fi, 1);
+  let insertAt = tabs.findIndex(t => t.id === toId);
+  if (!before) insertAt += 1;
+  tabs.splice(insertAt, 0, item);
+  for (const t of tabs) tabsEl.appendChild(t.tabEl);
+}
+
+function cycleTabs(delta) {
+  if (tabs.length < 2) return;
+  const idx = tabs.findIndex(t => t.id === activeTabId);
+  const next = (idx + delta + tabs.length) % tabs.length;
+  activateTab(tabs[next].id);
+}
+
+async function loadInTab(tab, raw) {
+  const real = await resolveDisplayUrl(raw);
+  tab.webview.loadURL(real);
+}
+
+async function openOrFocusInternal(maxUrl) {
+  const real = await window.maxAPI.app.resolveMaxUrl(maxUrl);
+  const existing = tabs.find(t => t.url === real || t.url === maxUrl);
+  if (existing) { activateTab(existing.id); return; }
+  createTab(maxUrl, true);
+}
+
+// =====================================================================
+// Tab context menu
+// =====================================================================
+function showTabMenu(tabId, x, y) {
+  tabMenuTabId = tabId;
+  tabMenu.classList.remove('hidden');
+  const r = tabMenu.getBoundingClientRect();
+  const left = Math.min(x, window.innerWidth  - r.width  - 4);
+  const top  = Math.min(y, window.innerHeight - r.height - 4);
+  tabMenu.style.left = left + 'px';
+  tabMenu.style.top  = top  + 'px';
+}
+
+function runTabAction(act, tid) {
+  const t = tabs.find(x => x.id === tid); if (!t) return;
+  switch (act) {
+    case 't-reload':       t.webview.reload(); break;
+    case 't-duplicate':    createTab(t.url, true); break;
+    case 't-pin':          t.pinned = !t.pinned; t.tabEl.classList.toggle('pinned', t.pinned); break;
+    case 't-close':        closeTab(tid); break;
+    case 't-close-others': [...tabs].forEach(x => { if (x.id !== tid) closeTab(x.id); }); break;
+    case 't-close-right': {
+      const idx = tabs.findIndex(x => x.id === tid);
+      [...tabs].slice(idx + 1).forEach(x => closeTab(x.id));
+      break;
+    }
+  }
+}
+
+// =====================================================================
+// App menu
+// =====================================================================
+function toggleAppMenu() {
+  if (!appMenu.classList.contains('hidden')) { hideMenus(); return; }
+  appMenu.classList.remove('hidden');
+  const btnRect = btnMenu.getBoundingClientRect();
+  const r = appMenu.getBoundingClientRect();
+  appMenu.style.left = Math.max(8, Math.min(btnRect.right - r.width, window.innerWidth - r.width - 8)) + 'px';
+  appMenu.style.top  = (btnRect.bottom + 6) + 'px';
+  updateZoomLabel();
+}
+
+function hideMenus() {
+  appMenu.classList.add('hidden');
+  tabMenu.classList.add('hidden');
+}
+
+function runMenuAction(act) {
+  switch (act) {
+    case 'new-tab':    createTab(SETTINGS.homepage || 'max://start', true); break;
+    case 'bookmarks':  openOrFocusInternal('max://bookmarks'); break;
+    case 'history':    openOrFocusInternal('max://history'); break;
+    case 'downloads':  openOrFocusInternal('max://downloads'); break;
+    case 'zoom-in':    zoom(+1); break;
+    case 'zoom-out':   zoom(-1); break;
+    case 'zoom-reset': zoomReset(); break;
+    case 'find':       openFind(); break;
+    case 'print':      printActive(); break;
+    case 'fullscreen': window.maxAPI.window.toggleFullscreen(); break;
+    case 'devtools':   requestDevTools(); break;
+    case 'settings':   openOrFocusInternal('max://settings'); break;
+    case 'about':      openOrFocusInternal('max://about'); break;
+    case 'quit':       window.maxAPI.window.close(); break;
+  }
+}
+
+// =====================================================================
+// Navigation actions
+// =====================================================================
+function navAct(act) {
+  const t = activeTab(); if (!t) return;
+  switch (act) {
+    case 'back':        if (t.webview.canGoBack())    t.webview.goBack(); break;
+    case 'forward':     if (t.webview.canGoForward()) t.webview.goForward(); break;
+    case 'reload':      t.webview.reload(); break;
+    case 'hard-reload': t.webview.reloadIgnoringCache(); break;
+    case 'home':        loadInTab(t, SETTINGS.homepage || 'max://start'); break;
+  }
+}
+
+// =====================================================================
+// Zoom / DevTools / Print
+// =====================================================================
+function zoom(delta) {
+  const t = activeTab(); if (!t) return;
+  t.zoom = Math.max(-5, Math.min(5, (t.zoom || 0) + delta * 0.5));
+  t.webview.setZoomLevel(t.zoom);
+  updateZoomLabel();
+}
+function zoomReset() {
+  const t = activeTab(); if (!t) return;
+  t.zoom = 0;
+  t.webview.setZoomLevel(0);
+  updateZoomLabel();
+}
+function currentZoomPercent() {
+  const t = activeTab(); if (!t) return 100;
+  return Math.round(Math.pow(1.2, t.zoom || 0) * 100);
+}
+function updateZoomLabel() {
+  if (zoomLabel) zoomLabel.textContent = currentZoomPercent() + '%';
+}
+
+function requestDevTools() {
+  modalFstec.classList.remove('hidden');
+}
+
+function printActive() {
+  const t = activeTab(); if (!t) return;
+  try { t.webview.print({ silent: false, printBackground: true }); } catch (e) { console.warn('print', e); }
+}
+
+// =====================================================================
+// Find in page
+// =====================================================================
+function openFind() {
+  findBar.classList.remove('hidden');
+  findInput.focus(); findInput.select();
+  if (findInput.value) doFind(findInput.value, true);
+}
+function closeFind(clear = true) {
+  findBar.classList.add('hidden');
+  findCount.textContent = '0/0';
+  const t = activeTab();
+  if (t && clear) try { t.webview.stopFindInPage('clearSelection'); } catch {}
+}
+function doFind(text, fromStart, forward = true) {
+  const t = activeTab(); if (!t) return;
+  if (!text) { try { t.webview.stopFindInPage('clearSelection'); } catch {} findCount.textContent = '0/0'; return; }
+  try { t.webview.findInPage(text, { forward, findNext: !fromStart }); } catch (e) { console.warn('find', e); }
+}
+
+// =====================================================================
+// Progress
+// =====================================================================
+function showProgress(on) {
+  if (on) progressBar.classList.add('active', 'indeterminate');
+  else    progressBar.classList.remove('active', 'indeterminate');
+}
+
+// =====================================================================
+// Bookmarks
+// =====================================================================
+async function updateBookmarkButton() {
+  const t = activeTab(); if (!t) return;
+  const isMark = await window.maxAPI.bookmarks.is(t.url);
+  btnBookmark.innerHTML = isMark ? ICONS.starFilled : ICONS.starOutline;
+  btnBookmark.classList.toggle('active', !!isMark);
+}
+
+async function toggleBookmarkCurrent() {
+  const t = activeTab(); if (!t) return;
+  const u = t.url; if (!u || u.startsWith('max:') || isInternalUrl(u)) return;
+  const list = await window.maxAPI.bookmarks.get();
+  const exist = list.find(b => b.url === u);
+  if (exist) await window.maxAPI.bookmarks.remove(exist.id);
+  else       await window.maxAPI.bookmarks.add({ url: u, title: t.title || u });
+  updateBookmarkButton();
+}
+
+async function renderBookmarksBar() {
+  const list = await window.maxAPI.bookmarks.get();
+  bookmarksBar.innerHTML = '';
+  if (!SETTINGS.showBookmarksBar || list.length === 0) {
+    bookmarksBar.classList.add('empty');
+    return;
+  }
+  bookmarksBar.classList.remove('empty');
+  for (const b of list) {
+    const el = document.createElement('div');
+    el.className = 'bookmark';
+    el.title = b.url;
+    let host = '';
+    try { host = new URL(b.url).hostname; } catch {}
+    el.innerHTML = `<img class="favicon" alt="" referrerpolicy="no-referrer"><span>${escapeHtml(b.title || b.url)}</span>`;
+    const img = el.querySelector('img.favicon');
+    attachFaviconFallback(img, host);
+    el.addEventListener('click', () => {
+      const t = activeTab(); if (t) loadInTab(t, b.url);
+    });
+    el.addEventListener('auxclick', (e) => { if (e.button === 1) createTab(b.url, false); });
+    el.addEventListener('contextmenu', async (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if (confirm('Удалить закладку «' + (b.title || b.url) + '»?')) {
+        await window.maxAPI.bookmarks.remove(b.id);
+      }
+    });
+    bookmarksBar.appendChild(el);
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+// Универсальный фолбэк для фавиконов: сначала favicon.yandex.net,
+// потом /favicon.ico с самого сайта, потом /apple-touch-icon.png.
+function attachFaviconFallback(img, host) {
+  if (!img || !host) return;
+  const candidates = [
+    `https://favicon.yandex.net/favicon/${host}`,
+    `https://${host}/favicon.ico`,
+    `https://${host}/apple-touch-icon.png`
+  ];
+  let i = 0;
+  img.onerror = () => {
+    if (i >= candidates.length) { img.removeAttribute('src'); img.onerror = null; return; }
+    img.src = candidates[i++];
+  };
+  img.src = candidates[i++];
+}
+
+init();

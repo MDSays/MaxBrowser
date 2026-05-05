@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' file: data:; img-src 'self' data: file: https: http:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline';">
+  <title>Макс Браузер</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar" id="topbar">
+    <div class="titlebar drag">
+      <div class="tabsbar no-drag">
+        <div class="tabs" id="tabs"></div>
+        <button class="newtab" id="btn-newtab" title="Новая вкладка (Ctrl+T)">+</button>
+        <div class="drag-fill drag"></div>
+      </div>
+
+      <div class="window-controls no-drag">
+        <button id="btn-min" class="winbtn" title="Свернуть">&#xE921;</button>
+        <button id="btn-max" class="winbtn" title="Развернуть">&#xE922;</button>
+        <button id="btn-close" class="winbtn winbtn-close" title="Закрыть">&#xE8BB;</button>
+      </div>
+    </div>
+
+    <div class="navbar no-drag">
+      <button class="navbtn" id="btn-back" title="Назад (Alt+←)">&#x2190;</button>
+      <button class="navbtn" id="btn-forward" title="Вперёд (Alt+→)">&#x2192;</button>
+      <button class="navbtn" id="btn-reload" title="Обновить (Ctrl+R)">&#x21BB;</button>
+      <button class="navbtn" id="btn-home" title="Домой">&#x2302;</button>
+
+      <form id="address-form" class="address-form">
+        <div class="address-wrap">
+          <span class="lock" id="lock" title="Состояние безопасности"></span>
+          <input type="text" id="address" class="address" spellcheck="false" autocomplete="off" placeholder="Введите адрес или поисковый запрос (только .RU и .РФ)" />
+          <button type="button" class="addr-action" id="btn-bookmark" title="Добавить в закладки (Ctrl+D)">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15 9 22 9 16.5 13.5 18.5 21 12 16.5 5.5 21 7.5 13.5 2 9 9 9 12 2"></polygon></svg>
+          </button>
+        </div>
+      </form>
+
+      <button class="navbtn" id="btn-downloads" title="Загрузки (Ctrl+J)">&#x2913;</button>
+      <button class="navbtn" id="btn-menu" title="Меню">&#x22EE;</button>
+    </div>
+
+    <div class="bookmarks-bar" id="bookmarks-bar"></div>
+
+    <div class="progress" id="progress"><div class="progress-bar" id="progress-bar"></div></div>
+  </header>
+
+  <main class="content" id="content"></main>
+
+  <!-- Find in page -->
+  <div class="find-bar hidden" id="find-bar">
+    <input type="text" id="find-input" placeholder="Найти на странице" spellcheck="false" />
+    <span class="find-count" id="find-count">0/0</span>
+    <button class="find-btn" id="find-prev" title="Предыдущее">&#x2191;</button>
+    <button class="find-btn" id="find-next" title="Следующее">&#x2193;</button>
+    <button class="find-btn" id="find-close" title="Закрыть (Esc)">&#x2715;</button>
+  </div>
+
+  <!-- App menu -->
+  <div class="menu hidden" id="app-menu">
+    <button class="mi" data-act="new-tab">    <span>Новая вкладка</span><span class="kbd">Ctrl+T</span></button>
+    <button class="mi" data-act="bookmarks">  <span>Закладки</span><span class="kbd">Ctrl+Shift+B</span></button>
+    <button class="mi" data-act="history">    <span>История</span><span class="kbd">Ctrl+H</span></button>
+    <button class="mi" data-act="downloads">  <span>Загрузки</span><span class="kbd">Ctrl+J</span></button>
+    <div class="sep"></div>
+
+    <div class="mi-row">
+      <span class="mi-row-label">Масштаб</span>
+      <div class="mi-zoom">
+        <button class="zoom-btn" data-act="zoom-out" title="Уменьшить (Ctrl+−)">−</button>
+        <span class="zoom-label" id="zoom-label">100%</span>
+        <button class="zoom-btn" data-act="zoom-in"  title="Увеличить (Ctrl+=)">+</button>
+        <button class="zoom-reset" data-act="zoom-reset" title="Сбросить (Ctrl+0)">⟳</button>
+      </div>
+    </div>
+
+    <div class="sep"></div>
+    <button class="mi" data-act="find">       <span>Найти на странице</span><span class="kbd">Ctrl+F</span></button>
+    <button class="mi" data-act="print">      <span>Печать</span><span class="kbd">Ctrl+P</span></button>
+    <button class="mi" data-act="fullscreen"> <span>Полный экран</span><span class="kbd">F11</span></button>
+    <button class="mi" data-act="devtools">   <span>Инструменты разработчика</span><span class="kbd">F12</span></button>
+    <div class="sep"></div>
+    <button class="mi" data-act="settings">   <span>Настройки</span><span class="kbd">Ctrl+,</span></button>
+    <button class="mi" data-act="about">      <span>О Макс</span></button>
+    <div class="sep"></div>
+    <button class="mi" data-act="quit">       <span>Выход</span></button>
+  </div>
+
+  <!-- Tab context menu -->
+  <div class="menu hidden" id="tab-menu">
+    <button class="mi" data-act="t-reload">Обновить</button>
+    <button class="mi" data-act="t-duplicate">Дублировать</button>
+    <button class="mi" data-act="t-pin">Закрепить / открепить</button>
+    <div class="sep"></div>
+    <button class="mi" data-act="t-close">Закрыть</button>
+    <button class="mi" data-act="t-close-others">Закрыть остальные</button>
+    <button class="mi" data-act="t-close-right">Закрыть справа</button>
+  </div>
+
+  <!-- Modal: ФСТЭК -->
+  <div class="modal hidden" id="modal-fstec">
+    <div class="modal-card">
+      <div class="modal-icon">
+        <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.7 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.7a2 2 0 0 0-3.4 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+      </div>
+      <h2>Доступ ограничен</h2>
+      <p class="modal-text">
+        Не найдена лицензия квалифицированного разработчика ФСТЭК.<br>
+        Использование инструментов разработчика заблокировано.
+      </p>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="modal-fstec-ok">Понятно</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

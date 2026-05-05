@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>О Макс · Макс Браузер</title>
+  <link rel="stylesheet" href="internal.css" />
+  <style>
+    .hero {
+      position: relative;
+      overflow: hidden;
+      padding: 28px 28px 24px;
+      background:
+        radial-gradient(900px 280px at 110% -40%, rgba(123,97,255,0.22), transparent 60%),
+        radial-gradient(700px 240px at -10% 120%, rgba(123,97,255,0.18), transparent 60%),
+        linear-gradient(180deg, var(--bg-2) 0%, var(--bg-2) 100%);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 14px;
+    }
+    .hero::before {
+      content: "";
+      position: absolute; top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #7B61FF 30%, #B89BFF 50%, #7B61FF 70%, transparent);
+      opacity: 0.9;
+    }
+    .hero-row {
+      display: flex; align-items: center; gap: 18px;
+    }
+    .hero-mark {
+      width: 64px; height: 64px;
+      flex: 0 0 64px;
+      border-radius: 14px;
+      background: linear-gradient(160deg, #7B61FF 0%, #5B3FFF 100%);
+      box-shadow: 0 8px 24px rgba(91,63,255,0.35), inset 0 1px 0 rgba(255,255,255,0.18);
+      display: grid; place-items: center;
+    }
+    .hero-mark img { width: 38px; height: 38px; display: block; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.25)); }
+    .hero h1 {
+      margin: 0 0 4px;
+      font-size: 26px; font-weight: 700;
+      letter-spacing: -0.2px;
+    }
+    .hero .meta { color: var(--fg-dim); font-size: 13px; margin-bottom: 0; }
+    .hero-pills { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 6px; }
+    .pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 10px;
+      font-size: 11px;
+      letter-spacing: 0.3px;
+      background: var(--bg-3);
+      border: 1px solid var(--border);
+      color: var(--fg-dim);
+      border-radius: 999px;
+    }
+    .pill.accent {
+      color: #E7E0FF;
+      background: rgba(123,97,255,0.14);
+      border-color: rgba(123,97,255,0.45);
+    }
+    .pill .dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #7B61FF;
+      box-shadow: 0 0 0 3px rgba(123,97,255,0.18);
+    }
+    .pill.flag-ru {
+      padding: 0;
+      width: 22px; height: 14px;
+      background: linear-gradient(180deg, #fff 0%, #fff 33.3%, #0039A6 33.3%, #0039A6 66.6%, #D52B1E 66.6%, #D52B1E 100%);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+    }
+    .feature {
+      display: flex; gap: 14px; align-items: flex-start;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .feature:last-child { border-bottom: none; }
+    .feature .icon {
+      width: 32px; height: 32px;
+      background: var(--bg-3);
+      border: 1px solid var(--border);
+      color: var(--accent);
+      display: flex; align-items: center; justify-content: center;
+      flex: 0 0 32px;
+      border-radius: 4px;
+    }
+    .feature .icon svg { display: block; }
+    .feature h3 { margin: 0 0 4px; font-size: 14px; font-weight: 600; }
+    .feature p  { margin: 0; color: var(--fg-dim); font-size: 13px; line-height: 1.55; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="hero">
+      <div class="hero-row">
+        <div class="hero-mark">
+          <img src="../../Max_logo.svg" alt="" draggable="false" />
+        </div>
+        <div>
+          <h1>Макс Браузер</h1>
+          <div class="meta">Версия 1.0.0 · Стабильный канал · Сборка для Российской Федерации</div>
+        </div>
+      </div>
+      <div class="hero-pills">
+        <span class="pill flag-ru" aria-label="Россия"></span>
+        <span class="pill accent"><span class="dot"></span>Полностью российская разработка</span>
+        <span class="pill">Реестр отечественного ПО</span>
+        <span class="pill">SafeNet&nbsp;Periphery</span>
+        <span class="pill">Local‑First</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Браузер нового поколения</h2>
+      <p>Макс Браузер — это <b>полностью отечественная разработка</b>, построенная на собственной
+      программной платформе с учётом требований цифрового суверенитета. Каждая подсистема
+      спроектирована российскими инженерами и оптимизирована под реальные сценарии работы
+      пользователей в Российской Федерации.</p>
+      <p>В основе браузера — фирменная технология <b>SafeNet&nbsp;Periphery</b>: интеллектуальный
+      контур доверия, который автоматически определяет принадлежность ресурса к доверенной
+      цифровой среде и активирует прозрачный механизм согласования при выходе за её пределы.
+      Это совершенно новый подход к безопасному сёрфингу — без блокираторов и сторонних плагинов,
+      «из коробки» и без настройки.</p>
+    </div>
+
+    <div class="card">
+      <h2>Ключевые преимущества</h2>
+
+      <div class="feature">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.5 9 8 11 4.5-2 8-6 8-11V5z"/></svg>
+        </div>
+        <div>
+          <h3>Технология SafeNet&nbsp;Periphery</h3>
+          <p>Адаптивный контур доверия в режиме реального времени анализирует каждый переход
+          и удерживает пользователя в безопасной цифровой среде. Никаких неожиданных переходов
+          на непроверенные ресурсы — только сознательная навигация под контролем платформы.</p>
+        </div>
+      </div>
+
+      <div class="feature">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        </div>
+        <div>
+          <h3>Рекордная скорость загрузки</h3>
+          <p>Движок CleanRender&nbsp;Core отсекает тяжёлые трекеры, рекламные сети и внешние
+          телеметрии ещё до начала отрисовки страницы. Сайты открываются ощутимо быстрее, ноутбук
+          работает дольше от батареи, мобильный трафик расходуется бережнее.</p>
+        </div>
+      </div>
+
+      <div class="feature">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+        </div>
+        <div>
+          <h3>Архитектура нулевого расширения</h3>
+          <p>Макс Браузер реализует современную модель Zero‑Extension&nbsp;Surface: вся
+          функциональность встроена и сертифицирована, поверхность атаки сведена к минимуму.
+          Невозможно случайно установить вредоносное дополнение или потерять данные через
+          сторонний плагин — потому что таких плагинов попросту нет.</p>
+        </div>
+      </div>
+
+      <div class="feature">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg>
+        </div>
+        <div>
+          <h3>Доверенная среда разработчика</h3>
+          <p>Инструменты разработчика работают в режиме верифицированного доступа по лицензии
+          квалифицированного специалиста ФСТЭК. Это исключает скрытое внедрение в страницы и
+          защищает обычного пользователя от приёмов социальной инженерии, основанных на консоли.</p>
+        </div>
+      </div>
+
+      <div class="feature">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        </div>
+        <div>
+          <h3>Отечественный поиск по умолчанию</h3>
+          <p>Поиск из адресной строки выполняется через Яндекс — релевантные результаты на
+          русском языке без перенаправления данных в зарубежные индексы.</p>
+        </div>
+      </div>
+
+      <div class="feature">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="9" ry="3"/><path d="M3 6v6c0 1.66 4 3 9 3s9-1.34 9-3V6"/><path d="M3 12v6c0 1.66 4 3 9 3s9-1.34 9-3v-6"/></svg>
+        </div>
+        <div>
+          <h3>Принцип Local‑First для ваших данных</h3>
+          <p>История, закладки, загрузки и настройки хранятся <b>только на вашем устройстве</b>.
+          Никаких облачных синхронизаций по умолчанию и никакой передачи персональных данных за
+          рубеж — приватность гарантируется на уровне архитектуры.</p>
+        </div>
+      </div>
+
+      <div class="feature">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </div>
+        <div>
+          <h3>Тёмный интерфейс EyeCare‑by‑Default</h3>
+          <p>Интерфейс изначально выполнен в эргономичной тёмной палитре: меньше нагрузки на
+          зрение при длительной работе, выше контрастность контента, лучшая концентрация.
+          Современный стандарт дизайна, а не вынужденная мера.</p>
+        </div>
+      </div>
+
+      <div class="feature">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+        </div>
+        <div>
+          <h3>Прозрачный диалог доступа</h3>
+          <p>Когда ресурс выходит за пределы доверенного контура, браузер показывает понятный
+          информационный экран с причиной и точным адресом запроса. Никаких загадочных «ошибок
+          сети» и пустых страниц — пользователь всегда понимает, что произошло и почему.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Соответствие нормативным требованиям</h2>
+      <p>Макс Браузер разработан с учётом действующего законодательства Российской Федерации
+      в области информационной безопасности. Все компоненты прошли внутреннее тестирование.</p>
+      <p style="color: var(--fg-mute); font-size: 12px; margin-top: 14px;">
+        © 2026 Макс Браузер. Сделано в России. Автор:
+        <a href="https://github.com/MDsays" target="_blank" rel="noopener" style="color: var(--accent); text-decoration: none;">@MDsays</a>.
+      </p>
+    </div>
+  </div>
+</body>
+</html>

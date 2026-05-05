@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>Главная · Макс Браузер</title>
+  <link rel="stylesheet" href="internal.css" />
+  <style>
+    /* Стартовая страница центрируется по вертикали в окне.
+       Если содержимое (плитки) перерастает высоту окна — естественный
+       скролл; padding гарантирует, что контент не прилипает к краям. */
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: 1fr;
+      place-items: center;
+      padding: 40px 24px;
+    }
+    .page {
+      width: 100%;
+      max-width: 720px;
+      margin: 0 auto;
+    }
+
+    .hero {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+    .hero .logo {
+      width: 72px; height: 72px;
+      display: block;
+      margin: 0 auto 14px;
+      pointer-events: none;
+    }
+    .hero h1 { margin: 0 0 6px; font-size: 26px; font-weight: 600; }
+    .hero .subtitle { color: var(--fg-dim); font-size: 13px; }
+
+    .search-form {
+      max-width: 520px; margin: 0 auto 28px;
+      position: relative;
+    }
+    .search-form input {
+      width: 100%;
+      background: var(--bg-2);
+      border: 1px solid var(--border);
+      color: var(--fg);
+      padding: 12px 16px 12px 40px;
+      font-size: 14px;
+      border-radius: 6px;
+      outline: none;
+    }
+    .search-form input:focus { border-color: var(--accent); }
+    .search-form .icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--fg-mute); display: flex; }
+    .search-form .icon svg { display: block; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 8px;
+      max-width: 720px;
+      margin: 0 auto;
+    }
+    .tile {
+      background: var(--bg-2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px 14px;
+      cursor: pointer;
+      transition: background .12s, border-color .12s;
+      display: flex; gap: 10px; align-items: center;
+    }
+    .tile:hover { background: var(--bg-3); border-color: var(--border-strong, #3a3a4d); }
+    .tile .favicon {
+      width: 20px; height: 20px;
+      object-fit: contain;
+      flex: 0 0 20px;
+      background: var(--bg-4);
+      border-radius: 3px;
+    }
+    .tile .info { min-width: 0; }
+    .tile .name { font-weight: 500; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tile .domain { font-size: 11.5px; color: var(--fg-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="hero">
+      <img class="logo" src="../../Max_logo.svg" alt="Макс Браузер" draggable="false" />
+      <h1>Макс Браузер</h1>
+      <div class="subtitle">Безопасный доступ в интернет</div>
+    </div>
+
+    <form class="search-form" id="searchForm">
+      <span class="icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      </span>
+      <input type="text" id="search" placeholder="Введите адрес или поисковый запрос" autofocus />
+    </form>
+
+    <div class="grid" id="grid"></div>
+  </main>
+
+<script>
+const popular = [
+  { name: 'Яндекс',         url: 'https://yandex.ru' },
+  { name: 'Госуслуги',      url: 'https://gosuslugi.ru' },
+  { name: 'ВКонтакте',      url: 'https://vk.ru' },
+  { name: 'Одноклассники',  url: 'https://ok.ru' },
+  { name: 'Mail.ru',        url: 'https://mail.ru' },
+  { name: 'Дзен',           url: 'https://dzen.ru' },
+  { name: 'Кинопоиск',      url: 'https://kinopoisk.ru' },
+  { name: 'RuTube',         url: 'https://rutube.ru' },
+  { name: 'Wildberries',    url: 'https://wildberries.ru' },
+  { name: 'Ozon',           url: 'https://ozon.ru' },
+  { name: 'Avito',          url: 'https://avito.ru' },
+  { name: 'Сбер',           url: 'https://sberbank.ru' }
+];
+
+const grid = document.getElementById('grid');
+
+// Источники фавиконов в порядке fallback'а:
+// 1) Российский сервис Яндекса — отдаёт PNG для большинства доменов.
+// 2) Прямой favicon.ico c самого сайта.
+// 3) /apple-touch-icon.png — у некоторых сайтов нет favicon.ico, но есть touch-icon.
+// Если все три не сработали — иконка остаётся пустой плашкой.
+function faviconCandidates(host) {
+  if (!host) return [];
+  return [
+    `https://favicon.yandex.net/favicon/${host}`,
+    `https://${host}/favicon.ico`,
+    `https://${host}/apple-touch-icon.png`
+  ];
+}
+
+function makeFavicon(host) {
+  const img = document.createElement('img');
+  img.className = 'favicon';
+  img.alt = '';
+  img.referrerPolicy = 'no-referrer';
+  img.loading = 'lazy';
+  const candidates = faviconCandidates(host);
+  let i = 0;
+  function tryNext() {
+    if (i >= candidates.length) { img.removeAttribute('src'); return; }
+    img.src = candidates[i++];
+  }
+  img.onerror = tryNext;
+  tryNext();
+  return img;
+}
+
+async function renderTiles() {
+  let tiles = popular;
+  try {
+    if (window.maxAPI && window.maxAPI.bookmarks) {
+      const bm = await window.maxAPI.bookmarks.get();
+      if (bm && bm.length) tiles = bm.slice(0, 24).map(b => ({ name: b.title || b.url, url: b.url }));
+    }
+  } catch {}
+  grid.innerHTML = '';
+  for (const item of tiles) {
+    let host = '';
+    try { host = new URL(item.url).hostname; } catch {}
+    const a = document.createElement('div');
+    a.className = 'tile';
+    a.appendChild(makeFavicon(host));
+    const info = document.createElement('div');
+    info.className = 'info';
+    info.innerHTML = `<div class="name">${escapeHtml(item.name)}</div><div class="domain">${escapeHtml(host)}</div>`;
+    a.appendChild(info);
+    a.addEventListener('click', () => navigate(item.url));
+    grid.appendChild(a);
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+function navigate(url) {
+  if (window.maxAPI && window.maxAPI.open) window.maxAPI.open(url);
+  else location.href = url;
+}
+
+document.getElementById('searchForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const v = document.getElementById('search').value.trim(); if (!v) return;
+  let target = v;
+  if (!/^(https?|max|file|about):/i.test(v)) {
+    if (/^[^\s]+\.[^\s]+(\/.*)?$/.test(v)) target = 'https://' + v;
+    else target = 'https://yandex.ru/search/?text=' + encodeURIComponent(v);
+  }
+  navigate(target);
+});
+
+window.maxAPI && window.maxAPI.bookmarks && window.maxAPI.bookmarks.onUpdated && window.maxAPI.bookmarks.onUpdated(renderTiles);
+
+renderTiles();
+</script>
+</body>
+</html>
